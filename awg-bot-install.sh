@@ -2,7 +2,7 @@
 
 ################################################################################
 # AWG Bot + AmneziaWG - Скрипт полной автоустановки
-# Версия: 2.4
+# Версия: 2.5 - Использует kernel-level AmneziaWG
 # Описание: Автоматическая установка и настройка AmneziaWG VPN сервера
 #           с Telegram ботом управления клиентами
 ################################################################################
@@ -321,7 +321,7 @@ create_directories() {
 # ============================================================================
 
 install_amneziawg() {
-    log_info "Начало установки AmneziaWG..."
+    log_info "Проверка AmneziaWG tools..."
     
     local awg_build_dir="${INSTALL_DIR}/amneziawg-go"
     
@@ -339,13 +339,13 @@ install_amneziawg() {
     
     cd "${awg_build_dir}"
     
-    log_info "Компиляция AmneziaWG..."
+    log_info "Компиляция AmneziaWG tools..."
     if ! make 2>&1 | tee -a "${LOG_FILE}"; then
         log_error "Ошибка при компиляции AmneziaWG"
         return 1
     fi
     
-    # Установка бинарника
+    # Установка бинарника (содержит утилиты для управления интерфейсом)
     log_info "Копирование бинарника..."
     if [[ -f "amneziawg-go" ]]; then
         cp "amneziawg-go" "/usr/local/bin/amneziawg-go"
@@ -359,25 +359,25 @@ install_amneziawg() {
         return 1
     fi
     
-    log_success "AmneziaWG успешно установлена"
+    log_success "AmneziaWG tools успешно установлены"
 }
 
-configure_amneziawg_systemd() {
-    log_info "Создание systemd-сервиса для AmneziaWG интерфейса..."
+configure_amneziawg_kernel() {
+    log_info "Создание systemd-сервиса для kernel-level AmneziaWG интерфейса..."
     
     cat > "/etc/systemd/system/amnezia-interface.service" << 'EOF'
 [Unit]
-Description=AmneziaWG Interface awg0
+Description=AmneziaWG Interface awg0 (kernel-level)
 Before=network-online.target awg-bot.service
 Wants=network-online.target
 
 [Service]
-Type=simple
-ExecStart=/usr/local/bin/amneziawg-go awg0
-Restart=on-failure
-RestartSec=5s
-StartLimitInterval=60s
-StartLimitBurst=3
+Type=oneshot
+ExecStart=/bin/bash -c 'ip link add awg0 type amneziawg'
+ExecStop=/bin/bash -c 'ip link del awg0'
+ExecStart=/bin/bash -c 'ip addr add 10.0.0.1/24 dev awg0'
+ExecStart=/bin/bash -c 'ip link set awg0 up'
+RemainAfterExit=yes
 
 # Logging
 StandardOutput=journal
@@ -399,14 +399,14 @@ EOF
     # Запуск сервиса
     systemctl start amnezia-interface.service || log_warning "Ошибка при запуске amnezia-interface"
     
-    sleep 3
+    sleep 2
     
     # Проверка статуса
-    if systemctl is-active --quiet amnezia-interface.service; then
-        log_success "Сервис amnezia-interface успешно запущен"
+    if ip link show awg0 &>/dev/null; then
+        log_success "Интерфейс awg0 успешно создан на уровне ядра"
     else
-        log_warning "Сервис amnezia-interface может не запуститься сразу"
-        journalctl -u amnezia-interface.service -n 10 2>&1 | tee -a "${LOG_FILE}" || true
+        log_warning "Интерфейс awg0 еще не создан, проверьте логи"
+        journalctl -u amnezia-interface.service -n 20 2>&1 | tee -a "${LOG_FILE}" || true
     fi
 }
 
@@ -495,6 +495,10 @@ LOG_FILE=/var/log/awg-bot/bot.log
 AWG_CONFIG_PATH=${AWG_CONFIG_DIR}
 AWG_BIN_PATH=/usr/local/bin/amneziawg-go
 AWG_SOCKET_PATH=/var/run/amneziawg
+
+# Interface Configuration
+AWG_INTERFACE=awg0
+AWG_NETWORK=10.0.0.0/24
 EOF
 
     chmod 600 "${bot_dir}/.env"
@@ -594,9 +598,9 @@ test_installation() {
     
     # Проверка бинарника AmneziaWG
     if command -v amneziawg-go &> /dev/null; then
-        log_success "✓ AmneziaWG бинарник доступен"
+        log_success "✓ AmneziaWG инструменты доступны"
     else
-        log_error "✗ AmneziaWG бинарник не найден"
+        log_error "✗ AmneziaWG инструменты не найдены"
         ((errors++))
     fi
     
@@ -611,8 +615,11 @@ test_installation() {
     # Проверка интерфейса awg0
     if ip link show awg0 &>/dev/null; then
         log_success "✓ Интерфейс awg0 активен"
+        local awg_ip=$(ip addr show awg0 2>/dev/null | grep "inet " | awk '{print $2}' || echo "не указан")
+        log_info "  └─ IP адрес: ${awg_ip}"
     else
-        log_warning "⚠ Интерфейс awg0 еще не создан (может создаться позже)"
+        log_error "✗ Интерфейс awg0 не активен"
+        ((errors++))
     fi
     
     # Проверка сервиса amnezia-interface
@@ -673,18 +680,21 @@ print_summary() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  📁 Директория установки: ${INSTALL_DIR}"
     echo "  🤖 AWG Bot: ${INSTALL_DIR}/AWG_Bot2.0"
-    echo "  🔐 AmneziaWG бинарник: /usr/local/bin/amneziawg-go"
-    echo "  🔐 Альтернативная ссылка: /usr/local/bin/wg"
+    echo "  🔐 AmneziaWG инструменты: /usr/local/bin/amneziawg-go"
+    echo "  🌐 Интерфейс: awg0 (kernel-level, 10.0.0.1/24)"
     echo "  ⚙️  Конфигурация: ${AWG_CONFIG_DIR}"
-    echo "  📜 Логи: /var/log/awg-bot/bot.log"
+    echo "  📜 Логи бота: /var/log/awg-bot/bot.log"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
     echo "🔧 Полезные команды:"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  # Статус интерфейса"
+    echo "  ip link show awg0 && ip addr show awg0"
+    echo
     echo "  # Статус всех сервисов"
     echo "  sudo systemctl status amnezia-interface.service awg-bot.service"
     echo
-    echo "  # Просмотр логов интерфейса AmneziaWG"
+    echo "  # Просмотр логов интерфейса"
     echo "  sudo journalctl -u amnezia-interface.service -f"
     echo
     echo "  # Просмотр логов бота в реальном времени"
@@ -693,15 +703,16 @@ print_summary() {
     echo "  # Перезагрузка обоих сервисов"
     echo "  sudo systemctl restart amnezia-interface.service awg-bot.service"
     echo
-    echo "  # Проверка доступности AmneziaWG"
+    echo "  # Проверка версии инструментов AmneziaWG"
     echo "  /usr/local/bin/amneziawg-go --version"
     echo
     echo "  # Просмотр полного лога установки"
     echo "  cat ${LOG_FILE}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
-    echo "🌐 Дополнительно:"
-    echo "  • Интерфейс AmneziaWG управляется отдельным systemd-сервисом"
+    echo "🌐 Важно:"
+    echo "  • Интерфейс AmneziaWG работает на уровне ядра (kernel-level)"
+    echo "  • Инструменты amneziawg-go используются для управления клиентами"
     echo "  • Бот автоматически запустится после создания интерфейса"
     echo "  • Оба сервиса настроены на автозапуск при перезагрузке"
     echo "  • Все логи записываются в journalctl"
@@ -744,7 +755,8 @@ main() {
     
     echo
     log_info "╔════════════════════════════════════════════════════════════╗"
-    log_info "║     AWG Bot + AmneziaWG VPN - Скрипт установки v2.4       ║"
+    log_info "║     AWG Bot + AmneziaWG VPN - Скрипт установки v2.5       ║"
+    log_info "║     Kernel-level AmneziaWG Support                         ║"
     log_info "╚════════════════════════════════════════════════════════════╝"
     echo
     
@@ -762,7 +774,7 @@ main() {
     install_dependencies
     install_golang
     install_amneziawg
-    configure_amneziawg_systemd
+    configure_amneziawg_kernel
     install_awg_bot
     
     # Конфигурирование
