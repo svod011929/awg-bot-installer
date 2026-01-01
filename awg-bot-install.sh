@@ -2,7 +2,7 @@
 
 ################################################################################
 # AWG Bot + AmneziaWG - Скрипт полной автоустановки
-# Версия: 2.5 - Использует kernel-level AmneziaWG
+# Версия: 2.6 - С поддержкой AmneziaWG kernel module
 # Описание: Автоматическая установка и настройка AmneziaWG VPN сервера
 #           с Telegram ботом управления клиентами
 ################################################################################
@@ -17,6 +17,7 @@ readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly LOG_FILE="/var/log/awg-bot-install.log"
 readonly INSTALL_DIR="/opt/awg-bot"
 readonly AWG_REPO="https://github.com/amnezia-vpn/amneziawg-go.git"
+readonly AWG_KERNEL_REPO="https://github.com/amnezia-vpn/amneziawg-linux-kernel-module.git"
 readonly BOT_REPO="https://github.com/JB-SelfCompany/AWG_Bot2.0.git"
 readonly VENV_PATH="${INSTALL_DIR}/venv"
 readonly CONFIG_FILE="${INSTALL_DIR}/.env"
@@ -114,6 +115,14 @@ check_disk_space() {
     return 0
 }
 
+check_kernel_module() {
+    if lsmod | grep -q amneziawg; then
+        log_success "AmneziaWG kernel module уже загружен"
+        return 0
+    fi
+    return 1
+}
+
 # ============================================================================
 # ФУНКЦИИ УСТАНОВКИ ЗАВИСИМОСТЕЙ
 # ============================================================================
@@ -133,6 +142,8 @@ install_dependencies() {
         "wget"
         "gnupg"
         "lsb-release"
+        "linux-headers-generic"
+        "pkg-config"
     )
 
     # Зависимости для Python и бота
@@ -317,11 +328,62 @@ create_directories() {
 }
 
 # ============================================================================
-# УСТАНОВКА AMNEZIAWG
+# УСТАНОВКА KERNEL MODULE
+# ============================================================================
+
+install_kernel_module() {
+    log_info "Начало установки AmneziaWG kernel module..."
+    
+    if check_kernel_module; then
+        return 0
+    fi
+    
+    local kernel_build_dir="${INSTALL_DIR}/amneziawg-linux-kernel-module"
+    
+    if [[ -d "${kernel_build_dir}" ]]; then
+        log_warning "Директория kernel module уже существует, обновление..."
+        cd "${kernel_build_dir}"
+        git pull origin main -q 2>/dev/null || log_warning "Ошибка при обновлении репозитория"
+    else
+        log_info "Клонирование репозитория kernel module..."
+        git clone --depth 1 "${AWG_KERNEL_REPO}" "${kernel_build_dir}" 2>&1 | tee -a "${LOG_FILE}" || {
+            log_error "Ошибка при клонировании kernel module"
+            return 1
+        }
+    fi
+    
+    cd "${kernel_build_dir}/src"
+    
+    log_info "Компиляция kernel module..."
+    if ! make -C /lib/modules/$(uname -r)/build M=$(pwd) 2>&1 | tee -a "${LOG_FILE}"; then
+        log_error "Ошибка при компиляции kernel module"
+        return 1
+    fi
+    
+    log_info "Установка kernel module..."
+    if ! make -C /lib/modules/$(uname -r)/build M=$(pwd) modules_install 2>&1 | tee -a "${LOG_FILE}"; then
+        log_error "Ошибка при установке kernel module"
+        return 1
+    fi
+    
+    log_info "Загрузка kernel module..."
+    depmod -a || log_warning "Ошибка при запуске depmod"
+    
+    if modprobe amneziawg 2>&1 | tee -a "${LOG_FILE}"; then
+        log_success "AmneziaWG kernel module успешно установлен и загружен"
+    else
+        log_warning "Ошибка при загрузке модуля, может потребоваться перезагрузка системы"
+    fi
+    
+    sleep 2
+}
+
+# ============================================================================
+# УСТАНОВКА AMNEZIAWG TOOLS
 # ============================================================================
 
 install_amneziawg() {
-    log_info "Проверка AmneziaWG tools..."
+    log_info "Установка AmneziaWG tools..."
     
     local awg_build_dir="${INSTALL_DIR}/amneziawg-go"
     
@@ -345,7 +407,7 @@ install_amneziawg() {
         return 1
     fi
     
-    # Установка бинарника (содержит утилиты для управления интерфейсом)
+    # Установка бинарника
     log_info "Копирование бинарника..."
     if [[ -f "amneziawg-go" ]]; then
         cp "amneziawg-go" "/usr/local/bin/amneziawg-go"
@@ -362,19 +424,19 @@ install_amneziawg() {
     log_success "AmneziaWG tools успешно установлены"
 }
 
-configure_amneziawg_kernel() {
-    log_info "Создание systemd-сервиса для kernel-level AmneziaWG интерфейса..."
+configure_amneziawg_interface() {
+    log_info "Создание systemd-сервиса для интерфейса awg0..."
     
     cat > "/etc/systemd/system/amnezia-interface.service" << 'EOF'
 [Unit]
-Description=AmneziaWG Interface awg0 (kernel-level)
+Description=AmneziaWG Interface awg0
 Before=network-online.target awg-bot.service
 Wants=network-online.target
 
 [Service]
 Type=oneshot
 ExecStart=/bin/bash -c 'ip link add awg0 type amneziawg'
-ExecStop=/bin/bash -c 'ip link del awg0'
+ExecStop=/bin/bash -c 'ip link del awg0 || true'
 ExecStart=/bin/bash -c 'ip addr add 10.0.0.1/24 dev awg0'
 ExecStart=/bin/bash -c 'ip link set awg0 up'
 RemainAfterExit=yes
@@ -403,7 +465,7 @@ EOF
     
     # Проверка статуса
     if ip link show awg0 &>/dev/null; then
-        log_success "Интерфейс awg0 успешно создан на уровне ядра"
+        log_success "Интерфейс awg0 успешно создан"
     else
         log_warning "Интерфейс awg0 еще не создан, проверьте логи"
         journalctl -u amnezia-interface.service -n 20 2>&1 | tee -a "${LOG_FILE}" || true
@@ -596,6 +658,14 @@ test_installation() {
     
     local errors=0
     
+    # Проверка kernel module
+    if lsmod | grep -q amneziawg; then
+        log_success "✓ AmneziaWG kernel module загружен"
+    else
+        log_error "✗ AmneziaWG kernel module не загружен"
+        ((errors++))
+    fi
+    
     # Проверка бинарника AmneziaWG
     if command -v amneziawg-go &> /dev/null; then
         log_success "✓ AmneziaWG инструменты доступны"
@@ -681,13 +751,16 @@ print_summary() {
     echo "  📁 Директория установки: ${INSTALL_DIR}"
     echo "  🤖 AWG Bot: ${INSTALL_DIR}/AWG_Bot2.0"
     echo "  🔐 AmneziaWG инструменты: /usr/local/bin/amneziawg-go"
-    echo "  🌐 Интерфейс: awg0 (kernel-level, 10.0.0.1/24)"
+    echo "  🌐 Интерфейс: awg0 (kernel-module, 10.0.0.1/24)"
     echo "  ⚙️  Конфигурация: ${AWG_CONFIG_DIR}"
     echo "  📜 Логи бота: /var/log/awg-bot/bot.log"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
     echo "🔧 Полезные команды:"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  # Проверка загрузки kernel module"
+    echo "  lsmod | grep amneziawg"
+    echo
     echo "  # Статус интерфейса"
     echo "  ip link show awg0 && ip addr show awg0"
     echo
@@ -703,15 +776,13 @@ print_summary() {
     echo "  # Перезагрузка обоих сервисов"
     echo "  sudo systemctl restart amnezia-interface.service awg-bot.service"
     echo
-    echo "  # Проверка версии инструментов AmneziaWG"
-    echo "  /usr/local/bin/amneziawg-go --version"
-    echo
     echo "  # Просмотр полного лога установки"
     echo "  cat ${LOG_FILE}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
     echo "🌐 Важно:"
-    echo "  • Интерфейс AmneziaWG работает на уровне ядра (kernel-level)"
+    echo "  • AmneziaWG kernel module установлен в ядро системы"
+    echo "  • Интерфейс awg0 создается с помощью kernel module"
     echo "  • Инструменты amneziawg-go используются для управления клиентами"
     echo "  • Бот автоматически запустится после создания интерфейса"
     echo "  • Оба сервиса настроены на автозапуск при перезагрузке"
@@ -755,8 +826,8 @@ main() {
     
     echo
     log_info "╔════════════════════════════════════════════════════════════╗"
-    log_info "║     AWG Bot + AmneziaWG VPN - Скрипт установки v2.5       ║"
-    log_info "║     Kernel-level AmneziaWG Support                         ║"
+    log_info "║     AWG Bot + AmneziaWG VPN - Скрипт установки v2.6       ║"
+    log_info "║     С поддержкой AmneziaWG Kernel Module                   ║"
     log_info "╚════════════════════════════════════════════════════════════╝"
     echo
     
@@ -773,8 +844,9 @@ main() {
     create_directories
     install_dependencies
     install_golang
+    install_kernel_module
     install_amneziawg
-    configure_amneziawg_kernel
+    configure_amneziawg_interface
     install_awg_bot
     
     # Конфигурирование
