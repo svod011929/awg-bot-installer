@@ -2,7 +2,7 @@
 
 ################################################################################
 # AWG Bot + AmneziaWG - Скрипт полной автоустановки
-# Версия: 2.3
+# Версия: 2.4
 # Описание: Автоматическая установка и настройка AmneziaWG VPN сервера
 #           с Telegram ботом управления клиентами
 ################################################################################
@@ -350,6 +350,10 @@ install_amneziawg() {
     if [[ -f "amneziawg-go" ]]; then
         cp "amneziawg-go" "/usr/local/bin/amneziawg-go"
         chmod +x "/usr/local/bin/amneziawg-go"
+        
+        # Создание альтернативной ссылки для совместимости
+        ln -sf /usr/local/bin/amneziawg-go /usr/local/bin/wg || true
+        
     else
         log_error "Бинарник amneziawg-go не найден"
         return 1
@@ -395,13 +399,14 @@ EOF
     # Запуск сервиса
     systemctl start amnezia-interface.service || log_warning "Ошибка при запуске amnezia-interface"
     
-    sleep 2
+    sleep 3
     
     # Проверка статуса
     if systemctl is-active --quiet amnezia-interface.service; then
         log_success "Сервис amnezia-interface успешно запущен"
     else
         log_warning "Сервис amnezia-interface может не запуститься сразу"
+        journalctl -u amnezia-interface.service -n 10 2>&1 | tee -a "${LOG_FILE}" || true
     fi
 }
 
@@ -489,6 +494,7 @@ LOG_FILE=/var/log/awg-bot/bot.log
 # AmneziaWG Configuration
 AWG_CONFIG_PATH=${AWG_CONFIG_DIR}
 AWG_BIN_PATH=/usr/local/bin/amneziawg-go
+AWG_SOCKET_PATH=/var/run/amneziawg
 EOF
 
     chmod 600 "${bot_dir}/.env"
@@ -496,6 +502,10 @@ EOF
     # Создание директории для данных
     mkdir -p "${bot_dir}/data"
     chmod 700 "${bot_dir}/data"
+    
+    # Создание директории для сокетов
+    mkdir -p "/var/run/amneziawg" || true
+    chmod 755 "/var/run/amneziawg" || true
     
     log_success "Конфигурирование завершено"
 }
@@ -590,6 +600,14 @@ test_installation() {
         ((errors++))
     fi
     
+    # Проверка файла бинарника
+    if [[ -f "/usr/local/bin/amneziawg-go" ]] && [[ -x "/usr/local/bin/amneziawg-go" ]]; then
+        log_success "✓ Файл /usr/local/bin/amneziawg-go доступен"
+    else
+        log_error "✗ Файл /usr/local/bin/amneziawg-go недоступен"
+        ((errors++))
+    fi
+    
     # Проверка интерфейса awg0
     if ip link show awg0 &>/dev/null; then
         log_success "✓ Интерфейс awg0 активен"
@@ -655,7 +673,8 @@ print_summary() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  📁 Директория установки: ${INSTALL_DIR}"
     echo "  🤖 AWG Bot: ${INSTALL_DIR}/AWG_Bot2.0"
-    echo "  🔐 AmneziaWG: /usr/local/bin/amneziawg-go"
+    echo "  🔐 AmneziaWG бинарник: /usr/local/bin/amneziawg-go"
+    echo "  🔐 Альтернативная ссылка: /usr/local/bin/wg"
     echo "  ⚙️  Конфигурация: ${AWG_CONFIG_DIR}"
     echo "  📜 Логи: /var/log/awg-bot/bot.log"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -673,6 +692,9 @@ print_summary() {
     echo
     echo "  # Перезагрузка обоих сервисов"
     echo "  sudo systemctl restart amnezia-interface.service awg-bot.service"
+    echo
+    echo "  # Проверка доступности AmneziaWG"
+    echo "  /usr/local/bin/amneziawg-go --version"
     echo
     echo "  # Просмотр полного лога установки"
     echo "  cat ${LOG_FILE}"
@@ -722,7 +744,7 @@ main() {
     
     echo
     log_info "╔════════════════════════════════════════════════════════════╗"
-    log_info "║     AWG Bot + AmneziaWG VPN - Скрипт установки v2.3       ║"
+    log_info "║     AWG Bot + AmneziaWG VPN - Скрипт установки v2.4       ║"
     log_info "╚════════════════════════════════════════════════════════════╝"
     echo
     
