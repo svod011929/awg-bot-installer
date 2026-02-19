@@ -205,8 +205,48 @@ install_dependencies() {
     else
         warning_msg "Некоторые пакеты не установлены (может быть ОК)"
     fi
+
+    step_header "Установка wireguard-tools для совместимости"
+    if timeout 600 apt-get install -y --no-install-recommends wireguard-tools > /dev/null 2>&1; then
+        success_msg "wireguard-tools установлен"
+    else
+        warning_msg "wireguard-tools не установлен (awg-quick может не работать)"
+    fi
     
     echo ""
+}
+
+ensure_awg_compatibility() {
+    step_header "Настройка совместимости команд awg"
+
+    if [ ! -x /usr/local/bin/awg-quick ] && command -v wg-quick > /dev/null 2>&1; then
+        cat > /usr/local/bin/awg-quick << 'EOF'
+#!/bin/bash
+set -e
+
+INTERFACE="$2"
+
+if [ "$1" = "up" ] || [ "$1" = "down" ]; then
+    if [ -f "/etc/amnezia/amneziawg/${INTERFACE}.conf" ] && [ ! -f "/etc/wireguard/${INTERFACE}.conf" ]; then
+        mkdir -p /etc/wireguard
+        ln -sf "/etc/amnezia/amneziawg/${INTERFACE}.conf" "/etc/wireguard/${INTERFACE}.conf"
+    fi
+fi
+
+exec wg-quick "$@"
+EOF
+        chmod +x /usr/local/bin/awg-quick
+        success_msg "Создан shim /usr/local/bin/awg-quick"
+    else
+        info_msg "awg-quick уже доступен"
+    fi
+
+    if ! command -v awg > /dev/null 2>&1 && command -v wg > /dev/null 2>&1; then
+        ln -sf "$(command -v wg)" /usr/local/bin/awg
+        success_msg "Создан shim /usr/local/bin/awg"
+    else
+        info_msg "awg уже доступен"
+    fi
 }
 
 # УСТАНОВКА AMNEZIAWG
@@ -299,6 +339,9 @@ PostDown = iptables -t nat -D POSTROUTING -s 10.10.8.0/24 -o $outbound_interface
 PublicKey = CLIENT_PUBLIC_KEY_HERE
 AllowedIPs = 10.10.8.2/32
 EOF
+
+    mkdir -p /etc/wireguard
+    ln -sf /etc/amnezia/amneziawg/awg0.conf /etc/wireguard/awg0.conf
     
     success_msg "Конфигурация создана"
     echo ""
@@ -468,6 +511,7 @@ main() {
     install_dependencies
     install_amneziawg
     setup_amneziawg
+    ensure_awg_compatibility
     install_awg_bot
     create_services
     start_services
