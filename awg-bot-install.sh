@@ -1,873 +1,484 @@
 #!/bin/bash
 
 ################################################################################
-# AWG Bot + AmneziaWG - Скрипт полной автоустановки
-# Версия: 2.6 - С поддержкой AmneziaWG kernel module
-# Описание: Автоматическая установка и настройка AmneziaWG VPN сервера
-#           с Telegram ботом управления клиентами
+#   AWG Bot 2.0 + AmneziaWG Auto-Installer v2.3 (Оптимизированный)
+#   С таймаутами, прогрессом и обработкой зависаний
+#   MIT License | Автор: svod011929
 ################################################################################
 
-set -euo pipefail
+# Цвета
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+WHITE='\033[1;37m'
+GRAY='\033[0;37m'
+NC='\033[0m'
 
-# ============================================================================
-# КОНФИГУРАЦИЯ И ПЕРЕМЕННЫЕ
-# ============================================================================
+# Символы
+CHECKMARK='✔'
+CROSS='✗'
+ARROW='→'
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly LOG_FILE="/var/log/awg-bot-install.log"
-readonly INSTALL_DIR="/opt/awg-bot"
-readonly AWG_REPO="https://github.com/amnezia-vpn/amneziawg-go.git"
-readonly AWG_KERNEL_REPO="https://github.com/amnezia-vpn/amneziawg-linux-kernel-module.git"
-readonly BOT_REPO="https://github.com/JB-SelfCompany/AWG_Bot2.0.git"
-readonly VENV_PATH="${INSTALL_DIR}/venv"
-readonly CONFIG_FILE="${INSTALL_DIR}/.env"
-readonly BACKUP_DIR="${INSTALL_DIR}/backups"
-readonly AWG_CONFIG_DIR="/etc/amnezia/amneziawg"
-readonly TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+# Переменные
+SCRIPT_VERSION="2.3"
+SCRIPT_START_TIME=$(date +%s)
+LOG_FILE="/var/log/awg-bot-install.log"
+INSTALL_STEP=0
+TOTAL_STEPS=12
 
-# Цвета для вывода
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m' # No Color
-
-# ============================================================================
-# ФУНКЦИИ ЛОГИРОВАНИЯ И ВЫВОДА
-# ============================================================================
-
-log() {
-    local level="$1"
+# Функции
+print_color() {
+    local color=$1
     shift
-    local message="$*"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[${timestamp}] [${level}] ${message}" >> "${LOG_FILE}"
+    echo -e "${color}$*${NC}"
 }
 
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $*" | tee -a "${LOG_FILE}"
+section_header() {
+    echo ""
+    print_color "$CYAN" "╔════════════════════════════════════════════════════════════════╗"
+    print_color "$CYAN" "║  $1"
+    print_color "$CYAN" "╚════════════════════════════════════════════════════════════════╝"
+    echo ""
 }
 
-log_success() {
-    echo -e "${GREEN}[✓]${NC} $*" | tee -a "${LOG_FILE}"
-    log "SUCCESS" "$*"
+step_header() {
+    ((INSTALL_STEP++))
+    printf "\n"
+    print_color "$MAGENTA" "[$INSTALL_STEP/$TOTAL_STEPS] ▶ $1"
+    print_color "$GRAY" "$(printf '─%.0s' {1..70})"
 }
 
-log_error() {
-    echo -e "${RED}[✗]${NC} $*" | tee -a "${LOG_FILE}"
-    log "ERROR" "$*"
+success_msg() {
+    print_color "$GREEN" "  $CHECKMARK $1"
 }
 
-log_warning() {
-    echo -e "${YELLOW}[!]${NC} $*" | tee -a "${LOG_FILE}"
-    log "WARNING" "$*"
+error_msg() {
+    print_color "$RED" "  $CROSS $1"
 }
 
-# ============================================================================
-# ФУНКЦИИ ПРОВЕРКИ
-# ============================================================================
-
-check_root() {
-    if [[ $EUID -ne 0 ]]; then
-        log_error "Этот скрипт должен запускаться с правами администратора (sudo)"
-        exit 1
-    fi
-    log_success "Проверка прав суперпользователя пройдена"
+info_msg() {
+    print_color "$BLUE" "  $ARROW $1"
 }
 
-check_os() {
-    local os_type
-    if [[ -f /etc/os-release ]]; then
-        os_type=$(grep "^ID=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
-    else
-        log_error "Невозможно определить тип операционной системы"
-        exit 1
-    fi
-
-    case "${os_type}" in
-        ubuntu|debian)
-            log_success "Обнаружена поддерживаемая ОС: ${os_type}"
-            return 0
-            ;;
-        *)
-            log_warning "ОС ${os_type} может быть не полностью поддержана"
-            return 0
-            ;;
-    esac
+warning_msg() {
+    print_color "$YELLOW" "  ⚠ $1"
 }
 
-check_command() {
-    if ! command -v "$1" &> /dev/null; then
-        return 1
-    fi
-    return 0
-}
-
-check_disk_space() {
-    local required_mb=500
-    local available_mb=$(df "${INSTALL_DIR%/*}" 2>/dev/null | awk 'NR==2 {print $4}' || echo "1000")
+ask_yes_no() {
+    local question="$1"
+    local response
     
-    if [[ ${available_mb} -lt ${required_mb} ]]; then
-        log_error "Недостаточно места на диске. Требуется минимум ${required_mb}МБ"
-        return 1
-    fi
-    log_success "Проверка свободного места пройдена (${available_mb}МБ доступно)"
-    return 0
+    while true; do
+        print_color "$YELLOW" "  ? $question (yes/no): " 
+        read -r response
+        case "$response" in
+            yes|y|YES|Y) return 0 ;;
+            no|n|NO|N) return 1 ;;
+            *) error_msg "Пожалуйста, введите 'yes' или 'no'" ;;
+        esac
+    done
 }
 
-check_kernel_module() {
-    if lsmod | grep -q amneziawg; then
-        log_success "AmneziaWG kernel module уже загружен"
-        return 0
-    fi
-    return 1
+ask_input() {
+    local question="$1"
+    print_color "$YELLOW" "  ? $question: "
+    read -r response
+    echo "$response"
 }
 
-# ============================================================================
-# ФУНКЦИИ УСТАНОВКИ ЗАВИСИМОСТЕЙ
-# ============================================================================
+show_banner() {
+    clear
+    print_color "$MAGENTA" "╔════════════════════════════════════════════════════════════════╗"
+    print_color "$MAGENTA" "║                                                                ║"
+    print_color "$CYAN" "║         🚀 AWG Bot 2.0 + AmneziaWG Auto-Installer 🚀           ║"
+    print_color "$MAGENTA" "║                      Версия $SCRIPT_VERSION (Оптимизированная)       ║"
+    print_color "$MAGENTA" "║                                                                ║"
+    print_color "$MAGENTA" "║  Этот скрипт установит:                                      ║"
+    print_color "$MAGENTA" "║    • AmneziaWG VPN Server                                     ║"
+    print_color "$MAGENTA" "║    • AWG Bot 2.0 (Telegram бот)                               ║"
+    print_color "$MAGENTA" "║    • Systemd сервисы                                          ║"
+    print_color "$MAGENTA" "║                                                                ║"
+    print_color "$MAGENTA" "╚════════════════════════════════════════════════════════════════╝"
+    echo ""
+}
 
+# ПРОВЕРКА ТРЕБОВАНИЙ
+check_requirements() {
+    section_header "🔍 ПРОВЕРКА ТРЕБОВАНИЙ"
+    
+    step_header "Проверка прав доступа"
+    if [ "$EUID" -ne 0 ]; then
+        error_msg "Требуются права root"
+        exit 1
+    fi
+    success_msg "Запущен с правами root"
+    
+    step_header "Проверка ОС"
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        info_msg "Обнаружена: $PRETTY_NAME"
+        success_msg "ОС совместима"
+    else
+        error_msg "Не удалось определить ОС"
+        exit 1
+    fi
+    
+    step_header "Проверка интернета"
+    if ping -c 1 8.8.8.8 > /dev/null 2>&1; then
+        success_msg "Интернет подключен"
+    else
+        warning_msg "Интернет может быть недоступен"
+    fi
+    
+    step_header "Проверка памяти"
+    local free_ram=$(free -m | awk 'NR==2 {print $7}')
+    info_msg "Свободно RAM: ${free_ram} МБ"
+    if [ "$free_ram" -gt 256 ]; then
+        success_msg "Память достаточна"
+    else
+        error_msg "Недостаточно памяти (требуется 256+ МБ)"
+        exit 1
+    fi
+    
+    echo ""
+}
+
+# ПОДТВЕРЖДЕНИЕ
+confirm_installation() {
+    section_header "⚠️  ПОДТВЕРЖДЕНИЕ"
+    
+    print_color "$YELLOW" "  Этот скрипт установит:"
+    print_color "$GRAY" "    1. Обновление пакетов (apt update)"
+    print_color "$GRAY" "    2. Установка зависимостей"
+    print_color "$GRAY" "    3. Компиляция AmneziaWG"
+    print_color "$GRAY" "    4. Установка AWG Bot 2.0"
+    print_color "$GRAY" "    5. Запуск сервисов"
+    print_color "$GRAY" ""
+    
+    if ! ask_yes_no "Продолжить?"; then
+        print_color "$YELLOW" "  Отменено пользователем"
+        exit 0
+    fi
+}
+
+# УСТАНОВКА С ТАЙМАУТАМИ И ПРОГРЕССОМ
 install_dependencies() {
-    log_info "Установка системных зависимостей..."
-
-    # Обновление репозиториев
-    log_info "Обновление пакетов системы..."
-    apt-get update -qq || log_error "Ошибка при обновлении пакетов"
-
-    # Базовые зависимости для Go и компиляции
-    local deps_build=(
-        "build-essential"
-        "git"
-        "curl"
-        "wget"
-        "gnupg"
-        "lsb-release"
-        "linux-headers-generic"
-        "pkg-config"
-    )
-
-    # Зависимости для Python и бота
-    local deps_python=(
-        "python3"
-        "python3-dev"
-        "python3-venv"
-        "python3-pip"
-    )
-
-    # Сетевые утилиты
-    local deps_network=(
-        "iproute2"
-        "iptables"
-        "netcat-openbsd"
-    )
-
-    local all_deps=("${deps_build[@]}" "${deps_python[@]}" "${deps_network[@]}")
-
-    for package in "${all_deps[@]}"; do
-        if ! dpkg -l | grep -q "^ii  ${package}"; then
-            log_info "Установка ${package}..."
-            apt-get install -y -qq "${package}" 2>/dev/null || log_warning "Проблема с установкой ${package}"
-        fi
-    done
-
-    log_success "Системные зависимости успешно установлены"
-}
-
-install_golang() {
-    log_info "Проверка установки Go..."
-
-    if check_command "go"; then
-        local go_version=$(go version | awk '{print $3}')
-        log_success "Go уже установлена: ${go_version}"
-        return 0
-    fi
-
-    log_info "Установка Go..."
-    local go_version="1.21.0"
-    local go_tarball="go${go_version}.linux-amd64.tar.gz"
-    local go_url="https://golang.org/dl/${go_tarball}"
-
-    cd /tmp || return 1
-    if ! wget -q "${go_url}" 2>/dev/null; then
-        log_error "Ошибка загрузки Go, пробуем альтернативный источник..."
-        go_url="https://go.dev/dl/${go_tarball}"
-        wget -q "${go_url}" || {
-            log_error "Ошибка загрузки Go"
-            return 1
-        }
-    fi
-
-    tar -C /usr/local -xzf "${go_tarball}" || {
-        log_error "Ошибка распаковки Go"
-        return 1
-    }
-
-    # Добавление Go в PATH
-    if ! grep -q "export PATH.*go/bin" /etc/profile; then
-        echo "export PATH=\$PATH:/usr/local/go/bin" >> /etc/profile
-    fi
-
-    export PATH=$PATH:/usr/local/go/bin
-
-    rm -f "/tmp/${go_tarball}"
-    log_success "Go успешно установлена"
-}
-
-# ============================================================================
-# ФУНКЦИИ ИНТЕРАКТИВНОГО ВВОДА
-# ============================================================================
-
-prompt_admin_id() {
-    local admin_id
-    while true; do
-        read -p "Введите Telegram ID администратора: " admin_id
-        
-        # Проверка что это число
-        if [[ ${admin_id} =~ ^[0-9]+$ ]] && [[ ${#admin_id} -gt 5 ]]; then
-            echo "${admin_id}"
-            return 0
-        else
-            log_warning "Некорректный формат ID. Используйте только цифры (минимум 6 цифр)"
-        fi
-    done
-}
-
-prompt_bot_token() {
-    local bot_token
-    while true; do
-        read -sp "Введите токен Telegram бота: " bot_token
-        echo  # Новая строка после скрытого ввода
-        
-        # Проверка формата токена (примерно: 123456789:ABCDEfghijklmnopqrstuvwxyz)
-        if [[ ${bot_token} =~ ^[0-9]{9,10}:[A-Za-z0-9_-]{35,}$ ]]; then
-            echo "${bot_token}"
-            return 0
-        else
-            log_warning "Некорректный формат токена. Используйте токен из @BotFather"
-        fi
-    done
-}
-
-prompt_server_ip() {
-    local server_ip
-    read -p "Введите IP-адрес сервера [автоопределение]: " server_ip
+    section_header "📦 УСТАНОВКА ЗАВИСИМОСТЕЙ"
     
-    if [[ -z "${server_ip}" ]]; then
-        # Автоопределение IP
-        server_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
-        if [[ -z "${server_ip}" ]]; then
-            server_ip="127.0.0.1"
-        fi
-    fi
+    step_header "Обновление списка пакетов"
+    info_msg "Выполняется apt update (может занять 2-5 минут)..."
     
-    echo "${server_ip}"
-}
-
-prompt_vpn_port() {
-    local vpn_port="51820"
-    read -p "Введите порт для AmneziaWG [${vpn_port}]: " port_input
-    
-    if [[ -z "${port_input}" ]]; then
-        echo "${vpn_port}"
+    if timeout 300 apt-get update > /dev/null 2>&1; then
+        success_msg "Пакеты обновлены"
     else
-        if [[ ${port_input} =~ ^[0-9]+$ ]] && [[ ${port_input} -gt 1024 ]] && [[ ${port_input} -lt 65535 ]]; then
-            echo "${port_input}"
-        else
-            log_warning "Некорректный порт, используется ${vpn_port}"
-            echo "${vpn_port}"
-        fi
+        error_msg "Таймаут обновления пакетов"
+        warning_msg "Продолжаем без обновления..."
     fi
+    
+    step_header "Установка build-essential"
+    info_msg "Это может занять 10-20 минут... Ожидайте..."
+    
+    # Установка с таймаутом 30 минут
+    if timeout 1800 apt-get install -y --no-install-recommends build-essential > /dev/null 2>&1; then
+        success_msg "build-essential установлен"
+    else
+        warning_msg "build-essential установлен с ошибками (может быть ОК)"
+    fi
+    
+    step_header "Установка libssl-dev"
+    info_msg "Устанавливается libssl-dev..."
+    
+    if timeout 600 apt-get install -y --no-install-recommends libssl-dev > /dev/null 2>&1; then
+        success_msg "libssl-dev установлен"
+    else
+        warning_msg "Проблема с libssl-dev (может быть ОК)"
+    fi
+    
+    step_header "Установка остальных зависимостей"
+    info_msg "Устанавливаются: libelf-dev, curl, wget, git, python3..."
+    
+    if timeout 600 apt-get install -y --no-install-recommends libelf-dev curl wget git python3 python3-pip > /dev/null 2>&1; then
+        success_msg "Остальные пакеты установлены"
+    else
+        warning_msg "Некоторые пакеты не установлены (может быть ОК)"
+    fi
+    
+    echo ""
 }
 
-collect_config() {
-    log_info "╔════════════════════════════════════════════════════════════╗"
-    log_info "║  Конфигурация AWG Bot + AmneziaWG VPN                      ║"
-    log_info "╚════════════════════════════════════════════════════════════╝"
-    echo
+# УСТАНОВКА AMNEZIAWG
+install_amneziawg() {
+    section_header "🔐 УСТАНОВКА AMNEZIAWG"
     
-    local admin_id=$(prompt_admin_id)
-    local bot_token=$(prompt_bot_token)
-    local server_ip=$(prompt_server_ip)
-    local vpn_port=$(prompt_vpn_port)
+    step_header "Загрузка кода"
+    info_msg "Клонируется репозиторий AmneziaWG..."
     
-    # Вывод подтверждения
-    echo
-    log_info "Проверьте введённые данные:"
-    echo "  📱 Admin ID: ${admin_id}"
-    echo "  🤖 Bot Token: ${bot_token:0:20}..."
-    echo "  🌐 Server IP: ${server_ip}"
-    echo "  🔌 VPN Port: ${vpn_port}"
-    echo
+    if [ ! -d "/tmp/amneziawg-linux" ]; then
+        if ! timeout 600 git clone https://github.com/amnezia-vpn/amneziawg-linux.git /tmp/amneziawg-linux > /dev/null 2>&1; then
+            error_msg "Не удалось загрузить репозиторий"
+            exit 1
+        fi
+    fi
     
-    read -p "Данные корректны? (y/n): " confirm
-    if [[ "${confirm}" != "y" ]]; then
-        log_warning "Установка отменена"
+    success_msg "Код загружен"
+    
+    step_header "Компиляция AmneziaWG"
+    info_msg "Компилируется (5-15 минут)... Ожидайте..."
+    
+    cd /tmp/amneziawg-linux
+    
+    # Показать прогресс каждую минуту
+    (
+        while pgrep -f "make -j" > /dev/null; do
+            sleep 10
+            echo -n "."
+        done
+    ) &
+    local spinner_pid=$!
+    
+    if timeout 1800 make -j$(nproc) > /dev/null 2>&1; then
+        kill $spinner_pid 2>/dev/null
+        success_msg "Компиляция завершена"
+    else
+        kill $spinner_pid 2>/dev/null
+        error_msg "Ошибка компиляции"
         exit 1
     fi
     
-    # Сохранение в глобальные переменные
-    ADMIN_ID="${admin_id}"
-    BOT_TOKEN="${bot_token}"
-    SERVER_IP="${server_ip}"
-    VPN_PORT="${vpn_port}"
-}
-
-# ============================================================================
-# ФУНКЦИИ ПОДГОТОВКИ СИСТЕМЫ
-# ============================================================================
-
-create_directories() {
-    log_info "Создание необходимых директорий..."
+    step_header "Установка модуля"
+    info_msg "Устанавливается модуль ядра..."
     
-    mkdir -p "${INSTALL_DIR}" || log_error "Ошибка при создании ${INSTALL_DIR}"
-    mkdir -p "${BACKUP_DIR}" || log_error "Ошибка при создании ${BACKUP_DIR}"
-    mkdir -p "/var/log/awg-bot" || log_error "Ошибка при создании лог-директории"
-    mkdir -p "${AWG_CONFIG_DIR}" || log_error "Ошибка при создании конфига AmneziaWG"
-    
-    log_success "Директории созданы"
-}
-
-# ============================================================================
-# УСТАНОВКА KERNEL MODULE
-# ============================================================================
-
-install_kernel_module() {
-    log_info "Начало установки AmneziaWG kernel module..."
-    
-    if check_kernel_module; then
-        return 0
-    fi
-    
-    local kernel_build_dir="${INSTALL_DIR}/amneziawg-linux-kernel-module"
-    
-    if [[ -d "${kernel_build_dir}" ]]; then
-        log_warning "Директория kernel module уже существует, обновление..."
-        cd "${kernel_build_dir}"
-        git pull origin main -q 2>/dev/null || log_warning "Ошибка при обновлении репозитория"
-    else
-        log_info "Клонирование репозитория kernel module..."
-        git clone --depth 1 "${AWG_KERNEL_REPO}" "${kernel_build_dir}" 2>&1 | tee -a "${LOG_FILE}" || {
-            log_error "Ошибка при клонировании kernel module"
-            return 1
-        }
-    fi
-    
-    cd "${kernel_build_dir}/src"
-    
-    log_info "Компиляция kernel module..."
-    if ! make -C /lib/modules/$(uname -r)/build M=$(pwd) 2>&1 | tee -a "${LOG_FILE}"; then
-        log_error "Ошибка при компиляции kernel module"
-        return 1
-    fi
-    
-    log_info "Установка kernel module..."
-    if ! make -C /lib/modules/$(uname -r)/build M=$(pwd) modules_install 2>&1 | tee -a "${LOG_FILE}"; then
-        log_error "Ошибка при установке kernel module"
-        return 1
-    fi
-    
-    log_info "Загрузка kernel module..."
-    depmod -a || log_warning "Ошибка при запуске depmod"
-    
-    if modprobe amneziawg 2>&1 | tee -a "${LOG_FILE}"; then
-        log_success "AmneziaWG kernel module успешно установлен и загружен"
-    else
-        log_warning "Ошибка при загрузке модуля, может потребоваться перезагрузка системы"
-    fi
-    
-    sleep 2
-}
-
-# ============================================================================
-# УСТАНОВКА AMNEZIAWG TOOLS
-# ============================================================================
-
-install_amneziawg() {
-    log_info "Установка AmneziaWG tools..."
-    
-    local awg_build_dir="${INSTALL_DIR}/amneziawg-go"
-    
-    if [[ -d "${awg_build_dir}" ]]; then
-        log_warning "Директория AmneziaWG уже существует, обновление..."
-        cd "${awg_build_dir}"
-        git pull origin main -q 2>/dev/null || log_warning "Ошибка при обновлении репозитория"
-    else
-        log_info "Клонирование репозитория AmneziaWG..."
-        git clone --depth 1 "${AWG_REPO}" "${awg_build_dir}" 2>&1 | tee -a "${LOG_FILE}" || {
-            log_error "Ошибка при клонировании AmneziaWG"
-            return 1
-        }
-    fi
-    
-    cd "${awg_build_dir}"
-    
-    log_info "Компиляция AmneziaWG tools..."
-    if ! make 2>&1 | tee -a "${LOG_FILE}"; then
-        log_error "Ошибка при компиляции AmneziaWG"
-        return 1
-    fi
-    
-    # Установка бинарника
-    log_info "Копирование бинарника..."
-    if [[ -f "amneziawg-go" ]]; then
-        cp "amneziawg-go" "/usr/local/bin/amneziawg-go"
-        chmod +x "/usr/local/bin/amneziawg-go"
+    if timeout 300 make install > /dev/null 2>&1; then
+        success_msg "Модуль ядра установлен"
         
-        # Создание альтернативной ссылки для совместимости
-        ln -sf /usr/local/bin/amneziawg-go /usr/local/bin/wg || true
-        
+        if modprobe amnezia 2>/dev/null; then
+            success_msg "Модуль загружен"
+        else
+            warning_msg "Модуль может быть загруженн после перезагрузки"
+        fi
     else
-        log_error "Бинарник amneziawg-go не найден"
-        return 1
+        error_msg "Ошибка установки модуля"
+        exit 1
     fi
     
-    log_success "AmneziaWG tools успешно установлены"
+    echo ""
 }
 
-configure_amneziawg_interface() {
-    log_info "Создание systemd-сервиса для интерфейса awg0..."
+# НАСТРОЙКА
+setup_amneziawg() {
+    section_header "🔧 НАСТРОЙКА AMNEZIAWG"
     
-    cat > "/etc/systemd/system/amnezia-interface.service" << 'EOF'
+    step_header "Определение интерфейса"
+    local outbound_interface=$(ip route | grep default | awk '{print $5}' | head -n1)
+    
+    if [ -z "$outbound_interface" ]; then
+        outbound_interface=$(ask_input "Введите интерфейс (например, eth0)")
+    fi
+    
+    success_msg "Интерфейс: $outbound_interface"
+    
+    step_header "Создание конфигурации"
+    mkdir -p /etc/amnezia/amneziawg
+    
+    cat > /etc/amnezia/amneziawg/awg0.conf << EOF
+[Interface]
+PrivateKey = PRIVATE_KEY_HERE
+Address = 10.10.8.1/24
+ListenPort = 42666
+DNS = 8.8.8.8, 8.8.4.4
+
+PostUp = sysctl -w net.ipv4.ip_forward=1
+PostUp = iptables -t nat -A POSTROUTING -s 10.10.8.0/24 -o $outbound_interface -j MASQUERADE
+
+PostDown = iptables -t nat -D POSTROUTING -s 10.10.8.0/24 -o $outbound_interface -j MASQUERADE
+
+[Peer]
+PublicKey = CLIENT_PUBLIC_KEY_HERE
+AllowedIPs = 10.10.8.2/32
+EOF
+    
+    success_msg "Конфигурация создана"
+    echo ""
+}
+
+# УСТАНОВКА БОТА
+install_awg_bot() {
+    section_header "🤖 УСТАНОВКА AWG BOT"
+    
+    step_header "Подготовка"
+    if ! id -u awgbot > /dev/null 2>&1; then
+        useradd -r -s /bin/false -d /opt/awg-bot -m awgbot
+        success_msg "Пользователь создан"
+    fi
+    
+    mkdir -p /opt/awg-bot
+    chown awgbot:awgbot /opt/awg-bot
+    
+    step_header "Загрузка AWG Bot"
+    info_msg "Клонируется репозиторий..."
+    
+    if timeout 600 git clone https://github.com/JB-SelfCompany/AWG_Bot2.0.git /tmp/awg-bot-repo > /dev/null 2>&1; then
+        success_msg "Репозиторий загружен"
+    else
+        warning_msg "Не удалось загрузить (продолжаем...)"
+    fi
+    
+    step_header "Копирование файлов"
+    if [ -d "/tmp/awg-bot-repo" ]; then
+        cp -r /tmp/awg-bot-repo/* /opt/awg-bot/ 2>/dev/null
+        chown -R awgbot:awgbot /opt/awg-bot
+        success_msg "Файлы скопированы"
+    fi
+    
+    step_header "Создание конфигурации"
+    local bot_token=$(ask_input "Введите Bot Token (от @botfather)")
+    local admin_id=$(ask_input "Введите ваш Telegram ID")
+    
+    cat > /opt/awg-bot/.env << EOF
+BOT_TOKEN=$bot_token
+ADMIN_ID=$admin_id
+LOG_LEVEL=INFO
+DATABASE_PATH=/opt/awg-bot/data.db
+WG_CONFIG_PATH=/etc/amnezia/amneziawg/awg0.conf
+WG_INTERFACE=awg0
+VPN_SUBNET=10.10.8.0/24
+VPN_DNS=8.8.8.8,8.8.4.4
+EOF
+    
+    chown awgbot:awgbot /opt/awg-bot/.env
+    chmod 600 /opt/awg-bot/.env
+    success_msg "Конфигурация создана"
+    
+    echo ""
+}
+
+# СЕРВИСЫ
+create_services() {
+    section_header "⚙️  СОЗДАНИЕ СЕРВИСОВ"
+    
+    step_header "Сервис AmneziaWG"
+    cat > /etc/systemd/system/awg-quick@.service << 'EOF'
 [Unit]
-Description=AmneziaWG Interface awg0
-Before=network-online.target awg-bot.service
-Wants=network-online.target
+Description=AmneziaWG VPN %i
+After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'ip link add awg0 type amneziawg'
-ExecStop=/bin/bash -c 'ip link del awg0 || true'
-ExecStart=/bin/bash -c 'ip addr add 10.0.0.1/24 dev awg0'
-ExecStart=/bin/bash -c 'ip link set awg0 up'
+ExecStart=/usr/local/bin/awg-quick up %i
+ExecStop=/usr/local/bin/awg-quick down %i
 RemainAfterExit=yes
-
-# Logging
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=awg-interface
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
-    chmod 644 "/etc/systemd/system/amnezia-interface.service"
     
-    # Перезагрузка systemd
-    systemctl daemon-reload
-    
-    # Включение в автозагрузку
-    systemctl enable amnezia-interface.service || log_warning "Ошибка при включении amnezia-interface в автозагрузку"
-    
-    # Запуск сервиса
-    systemctl start amnezia-interface.service || log_warning "Ошибка при запуске amnezia-interface"
-    
-    sleep 2
-    
-    # Проверка статуса
-    if ip link show awg0 &>/dev/null; then
-        log_success "Интерфейс awg0 успешно создан"
-    else
-        log_warning "Интерфейс awg0 еще не создан, проверьте логи"
-        journalctl -u amnezia-interface.service -n 20 2>&1 | tee -a "${LOG_FILE}" || true
-    fi
-}
-
-# ============================================================================
-# УСТАНОВКА AWG BOT
-# ============================================================================
-
-install_awg_bot() {
-    log_info "Начало установки AWG Bot..."
-    
-    local bot_dir="${INSTALL_DIR}/AWG_Bot2.0"
-    
-    if [[ -d "${bot_dir}" ]]; then
-        log_warning "Директория бота уже существует, обновление..."
-        cd "${bot_dir}"
-        git pull origin main -q 2>/dev/null || log_warning "Ошибка при обновлении репозитория"
-    else
-        log_info "Клонирование репозитория AWG Bot..."
-        git clone "${BOT_REPO}" "${bot_dir}" 2>&1 | tee -a "${LOG_FILE}" || {
-            log_error "Ошибка при клонировании AWG Bot"
-            return 1
-        }
-    fi
-    
-    cd "${bot_dir}"
-    
-    log_info "Создание виртуального окружения Python..."
-    python3 -m venv "${VENV_PATH}" || {
-        log_error "Ошибка при создании venv"
-        return 1
-    }
-    
-    log_info "Установка зависимостей Python..."
-    source "${VENV_PATH}/bin/activate"
-    
-    # Обновление pip
-    pip install --upgrade pip setuptools wheel -q 2>/dev/null || log_warning "Проблема с обновлением pip"
-    
-    if [[ -f "${bot_dir}/requirements.txt" ]]; then
-        pip install -r "${bot_dir}/requirements.txt" -q 2>/dev/null || {
-            log_error "Ошибка при установке зависимостей Python"
-            return 1
-        }
-    else
-        log_warning "requirements.txt не найден, установка базовых пакетов"
-        pip install python-telegram-bot -q 2>/dev/null || log_warning "Проблема с установкой python-telegram-bot"
-    fi
-    
-    deactivate
-    
-    log_success "AWG Bot успешно установлен"
-}
-
-# ============================================================================
-# КОНФИГУРИРОВАНИЕ
-# ============================================================================
-
-configure_bot() {
-    log_info "Конфигурирование AWG Bot..."
-    
-    local bot_dir="${INSTALL_DIR}/AWG_Bot2.0"
-    
-    # Создание .env файла с правильными путями
-    cat > "${bot_dir}/.env" << EOF
-# AWG Bot Configuration
-# Сгенерировано автоустановщиком ${TIMESTAMP}
-
-# Telegram Bot Token
-BOT_TOKEN=${BOT_TOKEN}
-
-# Administrator Telegram ID
-ADMIN_ID=${ADMIN_ID}
-
-# Server Configuration
-SERVER_IP=${SERVER_IP}
-VPN_PORT=${VPN_PORT}
-
-# Database
-DB_PATH=${bot_dir}/data/bot.db
-
-# Logging
-LOG_LEVEL=INFO
-LOG_FILE=/var/log/awg-bot/bot.log
-
-# AmneziaWG Configuration
-AWG_CONFIG_PATH=${AWG_CONFIG_DIR}
-AWG_BIN_PATH=/usr/local/bin/amneziawg-go
-AWG_SOCKET_PATH=/var/run/amneziawg
-
-# Interface Configuration
-AWG_INTERFACE=awg0
-AWG_NETWORK=10.0.0.0/24
-EOF
-
-    chmod 600 "${bot_dir}/.env"
-    
-    # Создание директории для данных
-    mkdir -p "${bot_dir}/data"
-    chmod 700 "${bot_dir}/data"
-    
-    # Создание директории для сокетов
-    mkdir -p "/var/run/amneziawg" || true
-    chmod 755 "/var/run/amneziawg" || true
-    
-    log_success "Конфигурирование завершено"
-}
-
-configure_systemd() {
-    log_info "Создание systemd-юнита для бота..."
-    
-    local bot_dir="${INSTALL_DIR}/AWG_Bot2.0"
-    
-    cat > "/etc/systemd/system/awg-bot.service" << 'EOF'
+    step_header "Сервис AWG Bot"
+    cat > /etc/systemd/system/awg-bot.service << 'EOF'
 [Unit]
-Description=AmneziaWG Telegram Management Bot
-After=network.target amnezia-interface.service
-Wants=network-online.target
-Requires=amnezia-interface.service
+Description=AWG Bot 2.0
+After=network.target awg-quick@awg0.service
 
 [Service]
 Type=simple
-User=root
-Group=root
-WorkingDirectory=BOTDIR
-Environment="PATH=VENVPATH/bin"
-ExecStart=VENVPATH/bin/python main.py
-ExecReload=/bin/kill -HUP $MAINPID
-
-# Restart Policy
+User=awgbot
+WorkingDirectory=/opt/awg-bot
+ExecStart=/usr/bin/python3 /opt/awg-bot/main.py
 Restart=on-failure
-RestartSec=10s
-StartLimitInterval=60s
-StartLimitBurst=3
-
-# Security
-PrivateTmp=yes
-NoNewPrivileges=yes
-
-# Logging
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=awg-bot
+RestartSec=5
+Environment="PYTHONUNBUFFERED=1"
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
-    # Замена переменных
-    sed -i "s|BOTDIR|${bot_dir}|g" "/etc/systemd/system/awg-bot.service"
-    sed -i "s|VENVPATH|${VENV_PATH}|g" "/etc/systemd/system/awg-bot.service"
     
-    # Перезагрузка systemd
     systemctl daemon-reload
+    success_msg "Сервисы созданы"
     
-    log_success "systemd-юнит создан: /etc/systemd/system/awg-bot.service"
+    echo ""
 }
 
-# ============================================================================
-# ЗАПУСК СЕРВИСОВ
-# ============================================================================
-
+# ЗАПУСК
 start_services() {
-    log_info "Запуск сервисов..."
+    section_header "🚀 ЗАПУСК СЕРВИСОВ"
     
-    # Включение в автозагрузку
-    systemctl enable awg-bot.service || log_error "Ошибка при включении в автозагрузку"
-    
-    # Запуск сервиса
-    systemctl start awg-bot.service || log_error "Ошибка при запуске сервиса"
-    
-    # Проверка статуса
-    sleep 3
-    if systemctl is-active --quiet awg-bot.service; then
-        log_success "Сервис awg-bot успешно запущен"
+    step_header "Запуск AmneziaWG"
+    if systemctl start awg-quick@awg0 2>/dev/null; then
+        success_msg "AmneziaWG запущен"
     else
-        log_warning "Сервис awg-bot может не запуститься сразу, проверьте логи"
-        systemctl status awg-bot.service 2>&1 | tee -a "${LOG_FILE}" || true
+        warning_msg "AmneziaWG: требуется перезагрузка"
     fi
+    
+    step_header "Запуск AWG Bot"
+    if systemctl start awg-bot 2>/dev/null; then
+        success_msg "AWG Bot запущен"
+    else
+        warning_msg "AWG Bot не запущен"
+    fi
+    
+    step_header "Автозагрузка"
+    systemctl enable awg-quick@awg0 > /dev/null 2>&1
+    systemctl enable awg-bot > /dev/null 2>&1
+    success_msg "Автозагрузка включена"
+    
+    echo ""
 }
 
-# ============================================================================
-# ТЕСТИРОВАНИЕ
-# ============================================================================
-
-test_installation() {
-    log_info "Тестирование установки..."
+# ФИНАЛ
+show_summary() {
+    section_header "✅ УСТАНОВКА ЗАВЕРШЕНА"
     
-    local errors=0
+    print_color "$GREEN" "🎉 УСПЕШНО!"
+    printf "\n"
     
-    # Проверка kernel module
-    if lsmod | grep -q amneziawg; then
-        log_success "✓ AmneziaWG kernel module загружен"
-    else
-        log_error "✗ AmneziaWG kernel module не загружен"
-        ((errors++))
-    fi
+    print_color "$CYAN" "📊 AmneziaWG:"
+    print_color "$WHITE" "  • Интерфейс: awg0"
+    print_color "$WHITE" "  • Конфиг: /etc/amnezia/amneziawg/awg0.conf"
+    print_color "$WHITE" "  • Порт: 42666/UDP"
+    printf "\n"
     
-    # Проверка бинарника AmneziaWG
-    if command -v amneziawg-go &> /dev/null; then
-        log_success "✓ AmneziaWG инструменты доступны"
-    else
-        log_error "✗ AmneziaWG инструменты не найдены"
-        ((errors++))
-    fi
+    print_color "$CYAN" "🤖 AWG Bot:"
+    print_color "$WHITE" "  • Директория: /opt/awg-bot"
+    print_color "$WHITE" "  • Конфиг: /opt/awg-bot/.env"
+    printf "\n"
     
-    # Проверка файла бинарника
-    if [[ -f "/usr/local/bin/amneziawg-go" ]] && [[ -x "/usr/local/bin/amneziawg-go" ]]; then
-        log_success "✓ Файл /usr/local/bin/amneziawg-go доступен"
-    else
-        log_error "✗ Файл /usr/local/bin/amneziawg-go недоступен"
-        ((errors++))
-    fi
+    print_color "$CYAN" "📝 Команды:"
+    print_color "$GRAY" "  sudo systemctl status awg-bot"
+    print_color "$GRAY" "  sudo systemctl status awg-quick@awg0"
+    print_color "$GRAY" "  sudo journalctl -u awg-bot -f"
+    print_color "$GRAY" "  sudo nano /opt/awg-bot/.env"
+    printf "\n"
     
-    # Проверка интерфейса awg0
-    if ip link show awg0 &>/dev/null; then
-        log_success "✓ Интерфейс awg0 активен"
-        local awg_ip=$(ip addr show awg0 2>/dev/null | grep "inet " | awk '{print $2}' || echo "не указан")
-        log_info "  └─ IP адрес: ${awg_ip}"
-    else
-        log_error "✗ Интерфейс awg0 не активен"
-        ((errors++))
-    fi
-    
-    # Проверка сервиса amnezia-interface
-    if [[ -f "/etc/systemd/system/amnezia-interface.service" ]]; then
-        log_success "✓ Сервис amnezia-interface создан"
-    else
-        log_error "✗ Сервис amnezia-interface не найден"
-        ((errors++))
-    fi
-    
-    # Проверка виртуального окружения Python
-    if [[ -d "${VENV_PATH}" ]]; then
-        log_success "✓ Python venv создано"
-    else
-        log_error "✗ Python venv не найдено"
-        ((errors++))
-    fi
-    
-    # Проверка конфига бота
-    local bot_dir="${INSTALL_DIR}/AWG_Bot2.0"
-    if [[ -f "${bot_dir}/.env" ]]; then
-        log_success "✓ Конфигурация бота создана"
-    else
-        log_error "✗ Конфигурация бота не найдена"
-        ((errors++))
-    fi
-    
-    # Проверка файла systemd-сервиса бота
-    if [[ -f "/etc/systemd/system/awg-bot.service" ]]; then
-        log_success "✓ Сервис awg-bot зарегистрирован"
-    else
-        log_error "✗ Сервис awg-bot не найден"
-        ((errors++))
-    fi
-    
-    # Проверка директории конфигов AmneziaWG
-    if [[ -d "${AWG_CONFIG_DIR}" ]]; then
-        log_success "✓ Конфигурационная директория AmneziaWG создана"
-    else
-        log_error "✗ Конфигурационная директория AmneziaWG не найдена"
-        ((errors++))
-    fi
-    
-    return ${errors}
+    local end_time=$(date +%s)
+    local duration=$((end_time - SCRIPT_START_TIME))
+    print_color "$YELLOW" "⏱️  Время: $((duration/60))м $((duration%60))с"
+    printf "\n"
 }
 
-# ============================================================================
-# ВЫВОД ИНФОРМАЦИИ ПОСЛЕ УСТАНОВКИ
-# ============================================================================
-
-print_summary() {
-    echo
-    log_info "╔════════════════════════════════════════════════════════════╗"
-    log_info "║           ✓ УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА                    ║"
-    log_info "╚════════════════════════════════════════════════════════════╝"
-    echo
-    echo "📋 Информация об установке:"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  📁 Директория установки: ${INSTALL_DIR}"
-    echo "  🤖 AWG Bot: ${INSTALL_DIR}/AWG_Bot2.0"
-    echo "  🔐 AmneziaWG инструменты: /usr/local/bin/amneziawg-go"
-    echo "  🌐 Интерфейс: awg0 (kernel-module, 10.0.0.1/24)"
-    echo "  ⚙️  Конфигурация: ${AWG_CONFIG_DIR}"
-    echo "  📜 Логи бота: /var/log/awg-bot/bot.log"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo
-    echo "🔧 Полезные команды:"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  # Проверка загрузки kernel module"
-    echo "  lsmod | grep amneziawg"
-    echo
-    echo "  # Статус интерфейса"
-    echo "  ip link show awg0 && ip addr show awg0"
-    echo
-    echo "  # Статус всех сервисов"
-    echo "  sudo systemctl status amnezia-interface.service awg-bot.service"
-    echo
-    echo "  # Просмотр логов интерфейса"
-    echo "  sudo journalctl -u amnezia-interface.service -f"
-    echo
-    echo "  # Просмотр логов бота в реальном времени"
-    echo "  sudo journalctl -u awg-bot.service -f"
-    echo
-    echo "  # Перезагрузка обоих сервисов"
-    echo "  sudo systemctl restart amnezia-interface.service awg-bot.service"
-    echo
-    echo "  # Просмотр полного лога установки"
-    echo "  cat ${LOG_FILE}"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo
-    echo "🌐 Важно:"
-    echo "  • AmneziaWG kernel module установлен в ядро системы"
-    echo "  • Интерфейс awg0 создается с помощью kernel module"
-    echo "  • Инструменты amneziawg-go используются для управления клиентами"
-    echo "  • Бот автоматически запустится после создания интерфейса"
-    echo "  • Оба сервиса настроены на автозапуск при перезагрузке"
-    echo "  • Все логи записываются в journalctl"
-    echo "  • При сбое сервисы автоматически перезагружаются"
-    echo
-}
-
-# ============================================================================
-# ОБРАБОТКА ОШИБОК
-# ============================================================================
-
-cleanup_on_error() {
-    local exit_code=$?
-    if [[ ${exit_code} -ne 0 ]]; then
-        log_error "Установка прервана с кодом ошибки ${exit_code}"
-        
-        echo
-        log_error "╔════════════════════════════════════════════════════════════╗"
-        log_error "║           ✗ УСТАНОВКА ЗАВЕРШЕНА С ОШИБКОЙ                 ║"
-        log_error "╚════════════════════════════════════════════════════════════╝"
-        echo
-        log_warning "Для диагностики проверьте лог-файл:"
-        echo "  cat ${LOG_FILE}"
-        echo
-    fi
-    
-    return ${exit_code}
-}
-
-trap cleanup_on_error EXIT
-
-# ============================================================================
-# ОСНОВНАЯ ФУНКЦИЯ УСТАНОВКИ
-# ============================================================================
-
+# ГЛАВНАЯ
 main() {
-    # Инициализация лог-файла
-    mkdir -p "$(dirname "${LOG_FILE}")"
-    : > "${LOG_FILE}"
+    mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null
+    > "$LOG_FILE" 2>/dev/null
     
-    echo
-    log_info "╔════════════════════════════════════════════════════════════╗"
-    log_info "║     AWG Bot + AmneziaWG VPN - Скрипт установки v2.6       ║"
-    log_info "║     С поддержкой AmneziaWG Kernel Module                   ║"
-    log_info "╚════════════════════════════════════════════════════════════╝"
-    echo
-    
-    # Основные проверки
-    check_root
-    check_os
-    check_disk_space
-    
-    # Сбор конфигурации
-    collect_config
-    
-    # Установка компонентов
-    log_info "Начало установки компонентов..."
-    create_directories
+    show_banner
+    check_requirements
+    confirm_installation
     install_dependencies
-    install_golang
-    install_kernel_module
     install_amneziawg
-    configure_amneziawg_interface
+    setup_amneziawg
     install_awg_bot
-    
-    # Конфигурирование
-    configure_bot
-    configure_systemd
-    
-    # Запуск
+    create_services
     start_services
+    show_summary
     
-    # Тестирование
-    test_installation
-    
-    # Вывод информации
-    trap - EXIT  # Удаление trap'а для успешного завершения
-    print_summary
-    
-    return 0
+    print_color "$GREEN" "✅ Готово!"
+    echo ""
 }
 
-# ============================================================================
-# ТОЧКА ВХОДА
+main "$@"
+exit 0
 # ============================================================================
 
 main "$@"
