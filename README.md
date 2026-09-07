@@ -6,19 +6,27 @@
 
 <br/>
 
+<p align="center">
+  <a href="https://github.com/svod011929/awg-bot-installer"><img src="https://img.shields.io/badge/GitHub-awg-bot-installer-0D1117?style=for-the-badge&logo=github&logoColor=38BDF8" alt="repo" /></a>
+  &nbsp;
+  <a href="https://t.me/KodoDrive"><img src="https://img.shields.io/badge/Telegram-@KodoDrive-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="tg" /></a>
+  &nbsp;
+  <a href="https://github.com/svod011929"><img src="https://img.shields.io/badge/Author-svod011929-7C3AED?style=for-the-badge&logo=github&logoColor=white" alt="author" /></a>
+</p>
+
+---
+
 <div align="center">
-  <img src="./assets/readme-meta.svg" width="100%" alt="meta" />
+  <img src="./assets/readme-about.svg" width="100%" alt="about" />
 </div>
 
 <br/>
 
-<p align="center">
-  <a href="https://github.com/svod011929/awg-bot-installer"><img src="https://img.shields.io/badge/GitHub-awg-bot-installer-0D1117?style=for-the-badge&logo=github&logoColor=38BDF8" alt="repo" /></a>
-  <a href="https://t.me/KodoDrive"><img src="https://img.shields.io/badge/Telegram-@KodoDrive-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="tg" /></a>
-  <a href="https://github.com/svod011929"><img src="https://img.shields.io/badge/Author-svod011929-7C3AED?style=for-the-badge&logo=github&logoColor=white" alt="author" /></a>
-</p>
+<div align="center">
+  <img src="./assets/readme-features.svg" width="100%" alt="features" />
+</div>
 
-<!-- /kododrive-readme-style -->
+---
 
 # AWG Bot 2.0 + AmneziaWG Installer v2.1
 
@@ -26,588 +34,19 @@
 
 ---
 
-## 📋 Содержание
-
-- [О проекте](#о-проекте)
-- [Что улучшено в v2.1](#что-улучшено-в-v21)
-- [Требования к системе](#требования-к-системе)
-- [Быстрый старт](#быстрый-старт)
-- [Детальная инструкция](#детальная-инструкция)
-- [Команды управления](#команды-управления)
-- [Устранение проблем](#устранение-проблем)
-- [Структура проекта](#структура-проекта)
-
 ---
 
-## О проекте
+<div align="center">
+  <img src="./assets/readme-stack.svg" width="100%" alt="stack" />
+</div>
 
-**AWG Bot 2.0 + AmneziaWG Installer** — это полностью автоматизированный скрипт установки VPN-сервера с Telegram-ботом для управления клиентами.
+<br/>
 
-### Что устанавливается:
+<div align="center">
+  <a href="https://t.me/KodoDrive"><img src="./assets/readme-cta.svg" width="100%" alt="contact" /></a>
+</div>
 
-1. **AmneziaWG** — Современный VPN протокол на базе WireGuard с улучшенной безопасностью
-2. **AWG Bot 2.0** — Telegram-бот для управления VPN клиентами
-3. **Systemd сервисы** — Автоматический запуск при загрузке системы
-4. **Полная конфигурация** — Все необходимые параметры уже предзаполнены
-
----
-
-## Что улучшено в v2.1
-
-### 🎨 Визуализация и интерфейс
-
-| Функция | Описание |
-|---------|---------|
-| **Цветной вывод** | Красный для ошибок, зелёный для успеха, жёлтый для предупреждений |
-| **Прогресс-бары** | Для каждой долгой операции (компиляция, обновление пакетов) |
-| **ASCII-арт баннер** | Красивый стартовый экран с информацией о проекте |
-| **Эмодзи и символы** | ✔, ✗, →, • для наглядности |
-| **Номерация этапов** | [1/18], [2/18] и т.д. показывают прогресс |
-| **Структурированный вывод** | Секции, подзаголовки, разделители |
-
-### 🔧 Функциональные улучшения
-
-| Функция | v1.0 | v2.1 |
-|---------|------|------|
-| **Синтаксис** | ❌ 5+ ошибок | ✅ Полностью исправлен |
-| **Интерфейс** | ❌ eth0 жёсткий | ✅ Автоопределение |
-| **Зависимости** | ❌ netstat | ✅ ss (встроенный) |
-| **Поддержка ОС** | ❌ Только Ubuntu | ✅ Ubuntu + Debian |
-| **Безопасность** | ❌ root права | ✅ Ограниченные права |
-| **Логирование** | ⚠️ Минимальное | ✅ Подробное в файл |
-| **Обработка ошибок** | ❌ Нет | ✅ Проверка каждого шага |
-| **Диагностика** | ⚠️ Базовая | ✅ Расширенная |
-| **Интерактивность** | ❌ Нет | ✅ Подтверждения действий |
-| **Время установки** | ⚠️ Неизвестно | ✅ Таймер с результатом |
-
-### 🔐 Критические исправления
-
-1. **Синтаксис Bash** — Исправлены все закрывающие скобки и структура функций
-2. **Сетевой интерфейс** — Автоматическое определение вместо жёсткого eth0
-3. **Зависимости** — netstat заменён на ss (встроен в iproute2)
-4. **Совместимость** — Полная поддержка Debian 11+ и Ubuntu 22.04+
-5. **Безопасность** — Бот работает с ограниченными правами, не root
-
-### 📊 Статистика
-
-```
-Строк кода:          ~800 строк
-Функций:             18+ функций
-Этапов установки:    18 этапов
-Форматирование:      100% (цвет + эмодзи)
-Логирование:         Все операции записываются
-Обработка ошибок:    Каждый шаг проверяется
-```
-
----
-
-## Требования к системе
-
-### Минимальные требования
-
-| Требование | Значение | Примечание |
-|-----------|----------|-----------|
-| **ОС** | Ubuntu 22.04+ или Debian 11+ | Обязательно |
-| **Пользователь** | root или sudo | Требуется для установки |
-| **Оперативная память** | 512 МБ | 1 ГБ рекомендуется |
-| **Дисковое пространство** | 2 ГБ | Свободного места |
-| **UDP порт** | 42666 | Должен быть открыт |
-| **Интернет** | Обязательно | Для загрузки пакетов |
-
-### Сетевые требования
-
-- ✅ Открытый UDP порт 42666 (для VPN клиентов)
-- ✅ Открытый TCP порт 443 (опционально, для HTTPS бота)
-- ✅ Активное интернет-соединение
-- ✅ Доступ к GitHub (для загрузки кода)
-
----
-
-## Быстрый старт
-
-### Способ 1: Скачать и запустить (рекомендуется)
-
-```bash
-# Шаг 1: Скачать скрипт
-curl -O https://raw.githubusercontent.com/svod011929/awg-bot-installer/main/awg-bot-install.sh
-
-# Шаг 2: Выдать права на выполнение
-chmod +x awg-bot-install.sh
-
-# Шаг 3: Запустить установку
-sudo bash awg-bot-install.sh
-
-# Шаг 4: Ответить на вопросы:
-# - Подтвердить установку (yes)
-# - Введить Telegram Bot Token (от @botfather)
-# - Введить Telegram ID (от @userinfobot)
-```
-
-### Способ 2: Через wget
-
-```bash
-wget https://raw.githubusercontent.com/svod011929/awg-bot-installer/main/awg-bot-install.sh
-chmod +x awg-bot-install.sh
-sudo bash awg-bot-install.sh
-```
-
-### Способ 3: Одна строка (на лету)
-
-```bash
-sudo bash <(curl -s https://raw.githubusercontent.com/svod011929/awg-bot-installer/main/awg-bot-install.sh)
-```
-
----
-
-## Детальная инструкция
-
-### Что происходит во время установки
-
-Скрипт выполняет **18 этапов** с полной визуализацией:
-
-#### 🔍 Проверка требований (этапы 1-5)
-
-```
-[1/18] ▶ Проверка прав доступа
-───────────────────────────────────────────────────────────────
-  ✔ Запущен с правами root
-
-[2/18] ▶ Определение операционной системы
-───────────────────────────────────────────────────────────────
-  → Обнаружена ОС: Ubuntu 22.04.3 LTS
-  ✔ ОС совместима
-
-[3/18] ▶ Проверка подключения к интернету
-───────────────────────────────────────────────────────────────
-  ✔ Интернет подключен
-
-[4/18] ▶ Проверка дискового пространства
-───────────────────────────────────────────────────────────────
-  ✔ Достаточно места на диске (50000000 КБ)
-
-[5/18] ▶ Проверка доступной оперативной памяти
-───────────────────────────────────────────────────────────────
-  → Свободно RAM: 1024 МБ
-  ✔ Память достаточна
-```
-
-#### 📦 Установка зависимостей (этапы 6-8)
-
-```
-[6/18] ▶ Обновление списка пакетов
-───────────────────────────────────────────────────────────────
-  → Выполняется: apt update...
-[==================================================] 100% (5/5)
-  ✔ Списки пакетов обновлены
-
-[7/18] ▶ Установка основных пакетов
-───────────────────────────────────────────────────────────────
-  → Устанавливаются пакеты: build-essential, libssl-dev...
-[==================================================] 100% (3/3)
-  ✔ Основные пакеты установлены
-
-[8/18] ▶ Установка дополнительных пакетов
-───────────────────────────────────────────────────────────────
-  → Устанавливаются дополнительные пакеты...
-  ✔ Дополнительные пакеты установлены
-```
-
-#### 🔐 Установка AmneziaWG (этапы 9-12)
-
-```
-[9/18] ▶ Загрузка исходного кода AmneziaWG
-───────────────────────────────────────────────────────────────
-  → Клонируется репозиторий AmneziaWG...
-  ✔ Исходный код загружен
-
-[10/18] ▶ Компиляция AmneziaWG
-───────────────────────────────────────────────────────────────
-  → Компилируется ядро AmneziaWG (может занять несколько минут)...
-[==================================================] 100% (5/5)
-  ✔ Компиляция завершена
-
-[11/18] ▶ Установка модуля ядра
-───────────────────────────────────────────────────────────────
-  → Устанавливается модуль ядра...
-  ✔ Модуль ядра установлен
-  ✔ Модуль загружен в ядро
-
-[12/18] ▶ Настройка интерфейса AmneziaWG
-───────────────────────────────────────────────────────────────
-  ✔ Обнаружен интерфейс: eth0
-  ✔ Конфигурация создана
-```
-
-#### 🤖 Установка AWG Bot (этапы 13-16)
-
-```
-[13/18] ▶ Создание пользователя бота
-───────────────────────────────────────────────────────────────
-  → Создаётся пользователь awgbot...
-  ✔ Пользователь awgbot создан
-
-[14/18] ▶ Загрузка AWG Bot 2.0
-───────────────────────────────────────────────────────────────
-  → Клонируется репозиторий AWG Bot...
-  ✔ Репозиторий загружен
-
-[15/18] ▶ Копирование файлов бота
-───────────────────────────────────────────────────────────────
-  → Копируются файлы бота в /opt/awg-bot...
-  ✔ Файлы скопированы
-
-[16/18] ▶ Установка Python зависимостей
-───────────────────────────────────────────────────────────────
-  → Установка зависимостей из requirements.txt...
-  ✔ Зависимости установлены
-
-[17/18] ▶ Создание файла конфигурации
-───────────────────────────────────────────────────────────────
-  ? Введите Telegram Bot Token (от @botfather): 123456789:ABCdef...
-  ? Введите ваш Telegram ID (от @userinfobot): 987654321
-  ✔ Конфигурация создана
-```
-
-#### ⚙️ Запуск сервисов (этапы 17-18)
-
-```
-[18/18] ▶ Создание systemd сервисов
-───────────────────────────────────────────────────────────────
-  ✔ Сервис AmneziaWG создан
-  ✔ Сервис AWG Bot создан
-  ✔ Сервисы запущены
-  ✔ Автозагрузка включена
-```
-
-#### ✅ Завершение
-
-```
-╔════════════════════════════════════════════════════════════════╗
-║              🎉 УСТАНОВКА УСПЕШНО ЗАВЕРШЕНА! 🎉                 ║
-╚════════════════════════════════════════════════════════════════╝
-
-📊 ПАРАМЕТРЫ AMNEZIAWG:
-  • Интерфейс: awg0
-  • Конфигурация: /etc/amnezia/amneziawg/awg0.conf
-  • Подсеть: 10.10.8.0/24
-  • УДП Порт: 42666
-
-🤖 ПАРАМЕТРЫ БОТА:
-  • Директория: /opt/awg-bot
-  • Пользователь: awgbot
-  • Конфигурация: /opt/awg-bot/.env
-
-⏱️ ВРЕМЯ УСТАНОВКИ: 12м 34с
-```
-
----
-
-## Команды управления
-
-### Статус сервисов
-
-```bash
-# Проверить статус AmneziaWG
-sudo systemctl status awg-quick@awg0
-
-# Проверить статус бота
-sudo systemctl status awg-bot
-
-# Проверить оба сервиса
-sudo systemctl status awg-quick@awg0 awg-bot
-```
-
-### Логи
-
-```bash
-# Логи установки
-sudo cat /var/log/awg-bot-install.log
-
-# Логи AmneziaWG в реальном времени
-sudo journalctl -u awg-quick@awg0 -f
-
-# Логи бота в реальном времени
-sudo journalctl -u awg-bot -f
-
-# Последние 50 строк логов бота
-sudo journalctl -u awg-bot -n 50
-
-# Логи за последний час
-sudo journalctl -u awg-bot --since "1 hour ago"
-```
-
-### Запуск и остановка
-
-```bash
-# Запустить AmneziaWG
-sudo systemctl start awg-quick@awg0
-
-# Остановить AmneziaWG
-sudo systemctl stop awg-quick@awg0
-
-# Перезагрузить AmneziaWG
-sudo systemctl restart awg-quick@awg0
-
-# Запустить бота
-sudo systemctl start awg-bot
-
-# Остановить бота
-sudo systemctl stop awg-bot
-
-# Перезагрузить бота
-sudo systemctl restart awg-bot
-```
-
-### Конфигурация
-
-```bash
-# Редактировать конфигурацию бота
-sudo nano /opt/awg-bot/.env
-
-# Редактировать конфиг AmneziaWG
-sudo nano /etc/amnezia/amneziawg/awg0.conf
-
-# Просмотреть конфигурацию бота
-sudo cat /opt/awg-bot/.env
-
-# Просмотреть интерфейс AmneziaWG
-ip addr show awg0
-ip route show table 200
-```
-
-### AmneziaWG управление
-
-```bash
-# Показать информацию об интерфейсе
-sudo awg show awg0
-
-# Показать все пиры
-sudo awg show awg0 peers
-
-# Показать ключи
-sudo awg show awg0 private-key
-sudo awg show awg0 public-key
-
-# Добавить пира
-sudo awg set awg0 peer [public-key] allowed-ips [ip]
-
-# Удалить пира
-sudo awg remove-peers awg0 [public-key]
-```
-
----
-
-## Устранение проблем
-
-### AmneziaWG не запускается
-
-```bash
-# Проверить статус
-sudo systemctl status awg-quick@awg0
-
-# Посмотреть логи
-sudo journalctl -u awg-quick@awg0 -n 50
-
-# Проверить модуль ядра
-lsmod | grep amnezia
-
-# Если модуль не загружен:
-sudo modprobe amnezia
-
-# Может потребоваться перезагрузка
-sudo reboot
-```
-
-### Бот не отвечает
-
-```bash
-# Проверить статус
-sudo systemctl status awg-bot
-
-# Посмотреть последние логи
-sudo journalctl -u awg-bot -n 50 -e
-
-# Проверить конфигурацию
-sudo cat /opt/awg-bot/.env
-
-# Перезагрузить бота
-sudo systemctl restart awg-bot
-
-# Проверить интернет
-ping -c 3 api.telegram.org
-```
-
-### Интернет не работает после установки
-
-```bash
-# Проверить включено ли ip_forward
-cat /proc/sys/net/ipv4/ip_forward
-
-# Если 0, включить:
-sudo sysctl -w net.ipv4.ip_forward=1
-
-# Проверить iptables правила
-sudo iptables -t nat -L -n -v
-
-# Проверить маршрутизацию
-ip route show table 200
-```
-
-### Порт 42666 не открыт
-
-```bash
-# Проверить слушает ли порт
-sudo ss -tulpn | grep 42666
-
-# Если ничего, попробовать перезагрузить интерфейс
-sudo systemctl restart awg-quick@awg0
-
-# Проверить firewall (UFW)
-sudo ufw status
-sudo ufw allow 42666/udp
-
-# Для iptables:
-sudo iptables -I INPUT -p udp --dport 42666 -j ACCEPT
-sudo iptables-save > /etc/iptables/rules.v4
-```
-
-### Логирование проблем
-
-```bash
-# Полный лог установки
-cat /var/log/awg-bot-install.log
-
-# Последние 100 строк
-tail -100 /var/log/awg-bot-install.log
-
-# Искать ошибки
-grep -i "error\|failed" /var/log/awg-bot-install.log
-
-# Экспортировать логи для анализа
-sudo journalctl -u awg-bot -u awg-quick@awg0 > /tmp/awg-logs.txt
-```
-
----
-
-## Структура проекта
-
-```
-/opt/awg-bot/
-├── main.py              # Главный файл бота
-├── requirements.txt     # Python зависимости
-├── .env                 # Конфигурация (создаётся автоматически)
-└── data.db              # База данных клиентов
-
-/etc/amnezia/amneziawg/
-└── awg0.conf            # Конфигурация интерфейса
-
-/var/log/
-└── awg-bot-install.log  # Логи установки
-
-/etc/systemd/system/
-├── awg-quick@.service   # Сервис AmneziaWG
-└── awg-bot.service      # Сервис бота
-```
-
----
-
-## Переменные окружения
-
-### Файл .env
-
-```bash
-# Токен Telegram бота
-BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
-
-# ID администратора (ваш Telegram ID)
-ADMIN_ID=987654321
-
-# Уровень логирования
-LOG_LEVEL=INFO
-
-# Пути к файлам
-DATABASE_PATH=/opt/awg-bot/data.db
-WG_CONFIG_PATH=/etc/amnezia/amneziawg/awg0.conf
-
-# Параметры VPN
-WG_INTERFACE=awg0
-VPN_SUBNET=10.10.8.0/24
-VPN_DNS=8.8.8.8,8.8.4.4
-```
-
-### Как получить необходимые данные
-
-| Данные | Как получить | Ссылка |
-|--------|-------------|--------|
-| **Bot Token** | Напишите боту @botfather `/newbot` | https://t.me/botfather |
-| **Ваш Telegram ID** | Напишите боту @userinfobot `/start` | https://t.me/userinfobot |
-| **Admin ID** | Используйте свой Telegram ID | - |
-
----
-
-## Рекомендации по безопасности
-
-### 🔒 Безопасность
-
-1. ✅ **Не делитесь токеном** — Держите BOT_TOKEN в секрете
-2. ✅ **Защитите .env файл** — Разрешения 600 (только владелец может читать)
-3. ✅ **Используйте firewall** — Открывайте только 42666 для UDP
-4. ✅ **Регулярно обновляйте** — `git pull && sudo systemctl restart awg-bot`
-5. ✅ **Проверяйте логи** — Ищите подозрительную активность
-6. ✅ **Резервные копии** — Сохраняйте /opt/awg-bot/data.db
-
-### 🛡️ Права доступа
-
-```bash
-# Правильные права для .env
--rw------- 1 awgbot awgbot  /opt/awg-bot/.env
-
-# Проверить
-ls -la /opt/awg-bot/.env
-
-# Исправить если нужно
-sudo chown awgbot:awgbot /opt/awg-bot/.env
-sudo chmod 600 /opt/awg-bot/.env
-```
-
----
-
-## Лицензия
-
-MIT License — используйте свободно в личных и коммерческих целях
-
----
-
-## Ссылки
-
-- 🤖 **AWG Bot 2.0**: https://github.com/JB-SelfCompany/AWG_Bot2.0
-- 🔐 **AmneziaWG**: https://github.com/amnezia-vpn/amneziawg-linux
-- 🌐 **Amnezia VPN**: https://amnezia.org/
-- 👨‍💻 **Автор**: https://github.com/svod011929
-
----
-
-## Поддержка
-
-Если у вас возникли проблемы:
-
-1. 📖 Проверьте [раздел устранения проблем](#устранение-проблем)
-2. 📋 Посмотрите логи: `sudo tail -100 /var/log/awg-bot-install.log`
-3. 🔍 Проверьте конфигурацию: `sudo cat /opt/awg-bot/.env`
-4. 💬 Откройте Issue на GitHub с описанием проблемы
-
----
-
-## Версия
-
-**v2.1 (Улучшенная)** — с полной визуализацией процесса установки
-
-**Дата релиза:** 2026-01-01  
-**Статус:** ✅ Готово к использованию
-
----
-
-**Спасибо за использование AWG Bot Installer! 🚀**
+<!-- /kododrive-readme-style -->
 
 ---
 
@@ -615,21 +54,21 @@ MIT License — используйте свободно в личных и ко�
 
 ## Проекты KodoDrive
 
-Другие проекты автора: [профиль @svod011929](https://github.com/svod011929) · [Telegram](https://t.me/KodoDrive)
+Другие проекты: [профиль @svod011929](https://github.com/svod011929) · [Telegram](https://t.me/KodoDrive)
 
 ### VPN и инфраструктура
 
-- [BuryatVPN — VPN-сервис + Telegram](https://github.com/svod011929/buryatvpn)
-- [VPN Server Installer — VLESS + TLS](https://github.com/svod011929/vpn-server-installer)
+- [BuryatVPN](https://github.com/svod011929/buryatvpn)
+- [VPN Server Installer](https://github.com/svod011929/vpn-server-installer)
 - [3X-UI Auto Installer](https://github.com/svod011929/3x-ui-auto-installer)
-- **AWG Bot Installer — AmneziaWG** ← ты здесь
+- **AWG Bot Installer** ← ты здесь
 - [RemnaShop Installer](https://github.com/svod011929/remnashop-installer)
-- [VPN Auto Installer — панели](https://github.com/svod011929/vpn-auto-installer)
-- [VPNHubBot — Telegram VPN-бот](https://github.com/svod011929/VPNHubBot)
+- [VPN Auto Installer](https://github.com/svod011929/vpn-auto-installer)
+- [VPNHubBot](https://github.com/svod011929/VPNHubBot)
 
 ### Telegram и автоматизация
 
-- [KDS Server Panel — SSH из Telegram](https://github.com/svod011929/KDS_Server_Panel)
+- [KDS Server Panel](https://github.com/svod011929/KDS_Server_Panel)
 - [Telegram → VK Poster](https://github.com/svod011929/telegram-to-vk-poster)
 - [KDS Parser CryptoBot](https://github.com/svod011929/kds_parser_cryptobot)
 - [Auction Bot](https://github.com/svod011929/auction-bot)
@@ -645,7 +84,8 @@ MIT License — используйте свободно в личных и ко�
 
 ### Сайты
 
-- [KodoDrive Portfolio](https://github.com/svod011929/kododrive-portfolio)
-- [kododrive.github.io](https://github.com/svod011929/kododrive.github.io)
+- [Portfolio](https://github.com/svod011929/kododrive-portfolio)
+- [GitHub Pages](https://github.com/svod011929/kododrive.github.io)
 
 <!-- /kododrive-projects-block -->
+
