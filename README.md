@@ -1,3 +1,25 @@
+<!-- kododrive-readme-style -->
+
+<div align="center">
+  <img src="./assets/readme-header.svg" width="100%" alt="awg-bot-installer" />
+</div>
+
+<br/>
+
+<div align="center">
+  <img src="./assets/readme-meta.svg" width="100%" alt="meta" />
+</div>
+
+<br/>
+
+<p align="center">
+  <a href="https://github.com/svod011929/awg-bot-installer"><img src="https://img.shields.io/badge/GitHub-awg-bot-installer-0D1117?style=for-the-badge&logo=github&logoColor=38BDF8" alt="repo" /></a>
+  <a href="https://t.me/KodoDrive"><img src="https://img.shields.io/badge/Telegram-@KodoDrive-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="tg" /></a>
+  <a href="https://github.com/svod011929"><img src="https://img.shields.io/badge/Author-svod011929-7C3AED?style=for-the-badge&logo=github&logoColor=white" alt="author" /></a>
+</p>
+
+<!-- /kododrive-readme-style -->
+
 # AWG Bot 2.0 + AmneziaWG Installer v2.1
 
 > 🚀 **Полностью переработанный и улучшенный скрипт установки с визуализацией всего процесса**
@@ -586,6 +608,8 @@ MIT License — используйте свободно в личных и ко�
 ---
 
 **Спасибо за использование AWG Bot Installer! 🚀**
+
+---
 
 <!-- kododrive-projects-block -->
 
